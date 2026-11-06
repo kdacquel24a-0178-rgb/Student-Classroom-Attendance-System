@@ -1,0 +1,10 @@
+{
+  "description": "Streamline student attendance tracking with a comprehensive dashboard for educators, featuring real-time reports, student management, and alerts.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
