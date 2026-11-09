@@ -23,7 +23,7 @@ export function Overview({
   const metrics = [
     {
       label: "Total students",
-      value: role === "admin" ? "46" : "5",
+      value: role === "admin" ? "66" : "5",
       detail: role === "admin" ? "Across Years 1–4" : "BSCS3A students",
       icon: "students",
       tone: "blue",
@@ -229,7 +229,7 @@ export function Overview({
           </div>
           <div className="admin-module-grid">
             {[
-              ["students", "Students", "46", "Years 1–4", "students"],
+              ["students", "Students", "66", "Years 1–4", "students"],
               ["teachers", "Teachers", "8", "Faculty records", "teachers"],
               ["book", "Class Schedule", "35", "Scheduled subjects", "classes"],
               [

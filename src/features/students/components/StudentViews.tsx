@@ -1,4 +1,5 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import { getStudents, type StudentRow } from "@/lib/database"
 import {
   students,
   adminStudentRegistry,
@@ -11,33 +12,124 @@ import { Icon } from "@/components/Icon"
 import { Button, StatusBadge } from "@/components"
 import { formatDate } from "@/lib/utils"
 
+function useSupabaseStudents() {
+  const [students, setStudents] = useState<StudentRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let active = true
+
+    async function loadStudents() {
+      try {
+        const data = await getStudents()
+
+        if (active) {
+          setStudents(data)
+          setError(null)
+        }
+      } catch (err) {
+        if (active) {
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Unable to retrieve students"
+          )
+        }
+      } finally {
+        if (active) {
+          setLoading(false)
+        }
+      }
+    }
+
+    void loadStudents()
+
+    return () => {
+      active = false
+    }
+  }, [])
+
+  return { students, loading, error }
+}
+
+function getCourseName(program: string | null) {
+  const value = program?.toUpperCase() ?? ""
+
+  if (value.includes("BSCS")) return "BSCS"
+  if (value.includes("ACT")) return "ACT"
+
+  return program || "—"
+}
+
+function getStudentInitials(name: string) {
+  return name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase()
+}
+
+
 export function AdminStudentRegistry() {
+  const {
+    students: dbStudents,
+    loading,
+    error,
+  } = useSupabaseStudents()
+
   const [query, setQuery] = useState("")
   const [yearFilter, setYearFilter] = useState("all")
   const [courseFilter, setCourseFilter] = useState("all")
-  const yearLabel = (year: number) =>
-    `${year}${
+
+  const yearLabel = (year: number | null) => {
+    if (!year) return "Not assigned"
+
+    return `${year}${
       year === 1 ? "st" : year === 2 ? "nd" : year === 3 ? "rd" : "th"
     } Year`
-  const filteredStudents = adminStudentRegistry.filter((student) => {
-    const matchesQuery = `${student.name} ${student.id} ${student.course}`
+  }
+
+  // Generate year summaries from Supabase records
+  const yearSummaries = [1, 2, 3, 4].map((year) => ({
+    year,
+    students: dbStudents.filter(
+      (student) => student.year_level === year
+    ).length,
+  }))
+
+  // Search and filter database records
+  const filteredStudents = dbStudents.filter((student) => {
+    const course = getCourseName(student.program)
+
+    const matchesQuery = (
+      `${student.full_name} ${student.student_number} ${course}`
+    )
       .toLowerCase()
       .includes(query.toLowerCase())
+
     const matchesYear =
-      yearFilter === "all" || student.year === Number(yearFilter)
+      yearFilter === "all" ||
+      student.year_level === Number(yearFilter)
+
     const matchesCourse =
-      courseFilter === "all" || student.course === courseFilter
+      courseFilter === "all" || course === courseFilter
+
     return matchesQuery && matchesYear && matchesCourse
   })
-  const getInitials = (name: string) => {
-    const [surname, given = ""] = name.split(",")
-    return `${surname.trim().charAt(0)}${given.trim().charAt(0)}`
+
+  if (loading) return <p>Loading student records...</p>
+
+  if (error) {
+    return <p role="alert">Error loading students: {error}</p>
   }
 
   return (
     <>
       <section className="registry-summary-grid">
-        {academicYearSummary.map((summary) => (
+        {yearSummaries.map((summary) => (
           <article
             className={`panel registry-summary-card year-${summary.year}`}
             key={summary.year}
@@ -45,10 +137,22 @@ export function AdminStudentRegistry() {
             <span>{yearLabel(summary.year)}</span>
             <strong>{summary.students}</strong>
             <small>enrolled students</small>
+
             <div>
-              <span>{summary.subjects} subjects</span>
-              <span>{summary.units} units</span>
-              <span>{summary.hours} hours</span>
+              <span>
+                {dbStudents.filter(
+                  (s) =>
+                    s.year_level === summary.year &&
+                    getCourseName(s.program) === "BSCS"
+                ).length} BSCS
+              </span>
+              <span>
+                {dbStudents.filter(
+                  (s) =>
+                    s.year_level === summary.year &&
+                    getCourseName(s.program) === "ACT"
+                ).length} ACT
+              </span>
             </div>
           </article>
         ))}
@@ -59,14 +163,14 @@ export function AdminStudentRegistry() {
           <div>
             <span className="eyebrow">A.Y. 2026–2027</span>
             <h3>College student registry</h3>
-            <p>
-              Official uploaded enrollment data from first through fourth year
-            </p>
+            <p>Student records retrieved from Supabase</p>
           </div>
+
           <span className="registry-total">
-            <strong>46</strong> total students
+            <strong>{dbStudents.length}</strong> total students
           </span>
         </div>
+
         <div className="registry-filters">
           <label className="search-field">
             <Icon name="search" size={18} />
@@ -77,6 +181,7 @@ export function AdminStudentRegistry() {
               value={query}
             />
           </label>
+
           <label className="registry-select">
             <span>Year level</span>
             <select
@@ -90,6 +195,7 @@ export function AdminStudentRegistry() {
               <option value="4">4th Year</option>
             </select>
           </label>
+
           <label className="registry-select">
             <span>Course</span>
             <select
@@ -101,10 +207,12 @@ export function AdminStudentRegistry() {
               <option value="ACT">ACT</option>
             </select>
           </label>
+
           <Button className="primary">
             <Icon name="plus" size={18} /> Add student
           </Button>
         </div>
+
         <div className="table-wrap">
           <table>
             <thead>
@@ -114,54 +222,65 @@ export function AdminStudentRegistry() {
                 <th>Student ID</th>
                 <th>Year level</th>
                 <th>Course</th>
-                <th>Section</th>
                 <th>Status</th>
               </tr>
             </thead>
+
             <tbody>
-              {filteredStudents.map((student) => (
-                <tr key={student.id}>
-                  <td>{student.number}</td>
-                  <td>
-                    <span className="student-cell">
-                      <span className="avatar">
-                        {getInitials(student.name)}
+              {filteredStudents.map((student, index) => {
+                const course = getCourseName(student.program)
+
+                return (
+                  <tr key={student.id}>
+                    <td>{index + 1}</td>
+
+                    <td>
+                      <span className="student-cell">
+                        <span className="avatar">
+                          {getStudentInitials(student.full_name)}
+                        </span>
+                        <strong>{student.full_name}</strong>
                       </span>
-                      <strong>{student.name}</strong>
-                    </span>
-                  </td>
-                  <td>{student.id}</td>
-                  <td>{yearLabel(student.year)}</td>
-                  <td>
-                    <span
-                      className={`course-pill course-${student.course.toLowerCase()}`}
-                    >
-                      {student.course}
-                    </span>
-                  </td>
-                  <td>
-                    {student.course} {student.year}
-                    {student.course === "BSCS" ? "A" : ""}
-                  </td>
-                  <td>
-                    <StatusBadge>Active</StatusBadge>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+
+                    <td>{student.student_number}</td>
+                    <td>{yearLabel(student.year_level)}</td>
+
+                    <td>
+                      <span
+                        className={`course-pill course-${course.toLowerCase()}`}
+                      >
+                        {course}
+                      </span>
+                    </td>
+
+                    <td>
+                      <StatusBadge>{student.status}</StatusBadge>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
+
+          {filteredStudents.length === 0 && (
+            <p className="schedule-empty">
+              No student records found.
+            </p>
+          )}
         </div>
+
         <div className="table-footer registry-footer">
           <span>
-            Showing {filteredStudents.length} of {adminStudentRegistry.length}{" "}
-            uploaded students
+            Showing {filteredStudents.length} of {dbStudents.length} students
           </span>
-          <span>Source: Enrollment roster and course offerings</span>
+          <span>Source: Supabase student records</span>
         </div>
       </section>
     </>
   )
 }
+
 
 export function ProfessorStudentDirectory() {
   const [query, setQuery] = useState("")
@@ -262,7 +381,6 @@ export function ProfessorStudentDirectory() {
                       <th>Student</th>
                       <th>Student ID</th>
                       <th>Course</th>
-                      <th>Section</th>
                       <th>Status</th>
                     </tr>
                   </thead>
@@ -285,10 +403,6 @@ export function ProfessorStudentDirectory() {
                           >
                             {student.course}
                           </span>
-                        </td>
-                        <td>
-                          {student.course} {student.year}
-                          {student.course === "BSCS" ? "A" : ""}
                         </td>
                         <td>
                           <StatusBadge>Active</StatusBadge>
