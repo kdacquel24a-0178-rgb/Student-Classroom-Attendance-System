@@ -12,46 +12,61 @@ import { Icon } from "@/components/Icon"
 import { Button, StatusBadge } from "@/components"
 import { formatDate } from "@/lib/utils"
 
+
 function useSupabaseStudents() {
-  const [students, setStudents] = useState<StudentRow[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [students, setStudents] = useState<StudentRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    let active = true
+    let active = true;
 
     async function loadStudents() {
       try {
-        const data = await getStudents()
+        setLoading(true);
+
+        const data = await getStudents();
 
         if (active) {
-          setStudents(data)
-          setError(null)
+          setStudents(data);
+          setError(null);
         }
-      } catch (err) {
+      } catch (err: unknown) {
+        console.error("Student loading error:", err);
+
+        let message = "Unable to retrieve students";
+
+        if (err instanceof Error) {
+          message = err.message;
+        } else if (
+          typeof err === "object" &&
+          err !== null &&
+          "message" in err &&
+          typeof err.message === "string"
+        ) {
+          message = err.message;
+        }
+
         if (active) {
-          setError(
-            err instanceof Error
-              ? err.message
-              : "Unable to retrieve students"
-          )
+          setError(message);
         }
       } finally {
         if (active) {
-          setLoading(false)
+          setLoading(false);
         }
       }
     }
 
-    void loadStudents()
+    void loadStudents();
 
     return () => {
-      active = false
-    }
-  }, [])
+      active = false;
+    };
+  }, []);
 
-  return { students, loading, error }
+  return { students, loading, error };
 }
+
 
 function getCourseName(program: string | null) {
   const value = program?.toUpperCase() ?? ""

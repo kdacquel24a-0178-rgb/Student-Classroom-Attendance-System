@@ -10,6 +10,18 @@ export interface StudentRow {
 }
 
 export async function getStudents(): Promise<StudentRow[]> {
+
+const {
+  data: { session },
+  error: sessionError
+} = await supabase.auth.getSession();
+
+console.log("SUPABASE AUTH CHECK:", {
+  hasSession: !!session,
+  userId: session?.user.id ?? null,
+  sessionError
+});
+
   const { data, error } = await supabase
     .from("students")
     .select(`
@@ -23,9 +35,15 @@ export async function getStudents(): Promise<StudentRow[]> {
     .order("full_name", { ascending: true });
 
   if (error) {
-    console.error("Student retrieval failed:", error.message);
-    throw error;
-  }
+  console.error("Student retrieval failed:", {
+    code: error.code,
+    message: error.message,
+    details: error.details,
+    hint: error.hint,
+  });
+
+  throw error;
+}
 
   return data ?? [];
 }
