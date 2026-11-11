@@ -150,7 +150,7 @@ export function AdminReportsOverview() {
 
       <section className="admin-report-metrics">
         {[
-          ["students", "46", "Students", "2 courses"],
+          ["students", "66", "Students", "2 courses"],
           ["teachers", "8", "Teachers", "Faculty assignments"],
           ["book", "35", "Class Schedule", "4 year levels"],
           ["chart", "91.3%", "Attendance", "Current average"],

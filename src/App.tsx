@@ -116,7 +116,7 @@ export default function App() {
               {item.id === "reports" && role === "student"
                 ? "Attendance Reports"
                 : item.label}
-              {item.id === "students" && <span className="nav-count">46</span>}
+              {item.id === "students" && <span className="nav-count">66</span>}
             </button>
           ))}
         </nav>

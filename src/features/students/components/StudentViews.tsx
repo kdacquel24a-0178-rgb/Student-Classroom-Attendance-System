@@ -282,39 +282,75 @@ export function AdminStudentRegistry() {
 }
 
 
+
 export function ProfessorStudentDirectory() {
+  const {
+    students: dbStudents,
+    loading,
+    error,
+  } = useSupabaseStudents()
+
   const [query, setQuery] = useState("")
   const [yearFilter, setYearFilter] = useState("all")
+
   const yearLabel = (year: number) =>
     `${year}${
       year === 1 ? "st" : year === 2 ? "nd" : year === 3 ? "rd" : "th"
     } Year`
-  const filteredStudents = adminStudentRegistry.filter((student) => {
+
+  // Calculate student totals from Supabase
+  const yearCounts = [1, 2, 3, 4].map((year) => ({
+    year,
+    students: dbStudents.filter(
+      (student) => student.year_level === year
+    ).length,
+  }))
+
+  // Search and filter actual student records
+  const filteredStudents = dbStudents.filter((student) => {
+    const course = getCourseName(student.program)
+
     const matchesYear =
-      yearFilter === "all" || student.year === Number(yearFilter)
-    const matchesQuery = `${student.name} ${student.id} ${student.course}`
-      .toLowerCase()
-      .includes(query.toLowerCase())
+      yearFilter === "all" ||
+      student.year_level === Number(yearFilter)
+
+    const matchesQuery =
+      `${student.full_name} ${student.student_number} ${course}`
+        .toLowerCase()
+        .includes(query.toLowerCase())
+
     return matchesYear && matchesQuery
   })
+
   const visibleYears = [1, 2, 3, 4].filter((year) =>
-    filteredStudents.some((student) => student.year === year),
+    filteredStudents.some(
+      (student) => student.year_level === year
+    )
   )
-  const getInitials = (name: string) => {
-    const [surname, given = ""] = name.split(",")
-    return `${surname.trim().charAt(0)}${given.trim().charAt(0)}`
+
+  if (loading) {
+    return <p>Loading student directory...</p>
+  }
+
+  if (error) {
+    return (
+      <p role="alert">
+        Error loading student directory: {error}
+      </p>
+    )
   }
 
   return (
     <section className="panel professor-student-directory">
       <div className="professor-student-hero">
         <div>
-          <span className="eyebrow">Connected Admin registry</span>
+          <span className="eyebrow">Supabase student registry</span>
           <h2>Student directory</h2>
           <p>Read-only enrollment records arranged by year level</p>
         </div>
+
         <span className="schedule-total">
-          <strong>{adminStudentRegistry.length}</strong> students
+          <strong>{dbStudents.length}</strong> students
         </span>
       </div>
 
@@ -324,16 +360,21 @@ export function ProfessorStudentDirectory() {
           onClick={() => setYearFilter("all")}
           type="button"
         >
-          All year levels <span>{adminStudentRegistry.length}</span>
+          All year levels
+          <span>{dbStudents.length}</span>
         </button>
-        {academicYearSummary.map((summary) => (
+
+        {yearCounts.map((summary) => (
           <button
-            className={yearFilter === String(summary.year) ? "active" : ""}
+            className={
+              yearFilter === String(summary.year) ? "active" : ""
+            }
             key={summary.year}
             onClick={() => setYearFilter(String(summary.year))}
             type="button"
           >
-            {yearLabel(summary.year)} <span>{summary.students}</span>
+            {yearLabel(summary.year)}
+            <span>{summary.students}</span>
           </button>
         ))}
       </div>
@@ -341,6 +382,7 @@ export function ProfessorStudentDirectory() {
       <div className="schedule-search">
         <label className="search-field">
           <Icon name="search" size={18} />
+
           <input
             aria-label="Search student directory"
             onChange={(event) => setQuery(event.target.value)}
@@ -348,31 +390,34 @@ export function ProfessorStudentDirectory() {
             value={query}
           />
         </label>
+
         <span>
           <Icon name="students" size={17} />
-          Synced with Admin
+          Live Supabase records
         </span>
       </div>
 
       <div className="professor-year-groups">
         {visibleYears.map((year) => {
           const yearStudents = filteredStudents.filter(
-            (student) => student.year === year,
+            (student) => student.year_level === year
           )
+
           return (
             <section className="professor-year-group" key={year}>
               <div className="schedule-level-heading">
                 <div>
                   <span>{year}</span>
+
                   <div>
                     <h3>{yearLabel(year)} students</h3>
                     <p>
-                      {yearStudents.length} displayed enrollment records · BSCS
-                      {year === 1 ? " and ACT" : ""}
+                      {yearStudents.length} displayed enrollment records
                     </p>
                   </div>
                 </div>
               </div>
+
               <div className="table-wrap">
                 <table>
                   <thead>
@@ -384,43 +429,59 @@ export function ProfessorStudentDirectory() {
                       <th>Status</th>
                     </tr>
                   </thead>
+
                   <tbody>
-                    {yearStudents.map((student) => (
-                      <tr key={student.id}>
-                        <td>{student.number}</td>
-                        <td>
-                          <span className="student-cell">
-                            <span className="avatar">
-                              {getInitials(student.name)}
+                    {yearStudents.map((student, index) => {
+                      const course = getCourseName(student.program)
+
+                      return (
+                        <tr key={student.id}>
+                          <td>{index + 1}</td>
+
+                          <td>
+                            <span className="student-cell">
+                              <span className="avatar">
+                                {getStudentInitials(student.full_name)}
+                              </span>
+
+                              <strong>{student.full_name}</strong>
                             </span>
-                            <strong>{student.name}</strong>
-                          </span>
-                        </td>
-                        <td>{student.id}</td>
-                        <td>
-                          <span
-                            className={`course-pill course-${student.course.toLowerCase()}`}
-                          >
-                            {student.course}
-                          </span>
-                        </td>
-                        <td>
-                          <StatusBadge>Active</StatusBadge>
-                        </td>
-                      </tr>
-                    ))}
+                          </td>
+
+                          <td>{student.student_number}</td>
+
+                          <td>
+                            <span
+                              className={`course-pill course-${course.toLowerCase()}`}
+                            >
+                              {course}
+                            </span>
+                          </td>
+
+                          <td>
+                            <StatusBadge>
+                              {student.status}
+                            </StatusBadge>
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
             </section>
           )
         })}
-        {!visibleYears.length && (
-          <p className="schedule-empty">No student records match the search.</p>
+
+        {visibleYears.length === 0 && (
+          <p className="schedule-empty">
+            No student records match the search.
+          </p>
         )}
       </div>
+
       <div className="schedule-source">
-        Read-only faculty view · Student records are managed by Admin
+        Read-only faculty view · Student records retrieved from Supabase
       </div>
     </section>
   )
