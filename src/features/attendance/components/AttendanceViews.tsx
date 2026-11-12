@@ -43,7 +43,7 @@ export function AdminAttendanceOverview() {
 
       <section className="admin-attendance-metrics">
         {[
-          ["Students", "46", "Uploaded registry"],
+          ["Students", "66", "Uploaded registry"],
           ["Present", "41", "89.1% present"],
           ["Late", "2", "Counted attended"],
           ["Absent", "3", "Requires follow-up"],
@@ -63,7 +63,7 @@ export function AdminAttendanceOverview() {
             <p>{formattedDate} · First through fourth year</p>
           </div>
           <span className="sync-status">
-            <Icon name="check" size={14} /> 46 records connected
+            <Icon name="check" size={14} /> 66 records connected
           </span>
         </div>
         <div className="table-wrap">
