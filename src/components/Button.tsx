@@ -1,16 +1,17 @@
-import { type ReactNode } from "react"
+import { ButtonHTMLAttributes, ReactNode } from "react"
 
-export function Button({
-  children,
-  className = "",
-  onClick,
-}: {
+// Extending ButtonHTMLAttributes allows the component to accept 'disabled', 'type', etc.
+export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   children: ReactNode
   className?: string
-  onClick?: () => void
-}) {
+}
+
+export function Button({ children, className = "", ...props }: ButtonProps) {
   return (
-    <button className={`button ${className}`} onClick={onClick} type="button">
+    <button 
+      className={`btn ${className}`} // Adjust 'btn' to match your default styling class if you have one
+      {...props} // This automatically passes down 'disabled', 'onClick', etc.
+    >
       {children}
     </button>
   )

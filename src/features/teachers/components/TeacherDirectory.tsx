@@ -1,22 +1,52 @@
-import { useState } from "react"
-import {
-  adminClassSchedule,
-  adminTeacherDirectory,
-} from "@/features/shared/data"
+import { useState, useMemo } from "react"
 import { Icon } from "@/components/Icon"
 import { StatusBadge } from "@/components"
+import { useClassData, ClassSchedule } from "@/hooks/useClassData"
 
 export function AdminTeacherDirectory() {
+  const { schedule, loading, error } = useClassData()
   const [query, setQuery] = useState("")
+
+  const adminTeacherDirectory = useMemo(() => {
+    if (!schedule) return []
+
+    const teacherNameOverrides: Record<string, string> = {
+      "Ms. Ruby Cruz": "Prof. Ruby Cruz",
+      "Ms. Mary Arroyo": "Prof. Mary Arroyo",
+    }
+
+    const directoryMap = schedule.reduce((directory: Map<string, string[]>, course: ClassSchedule) => {
+      const name = teacherNameOverrides[course.instructor] || course.instructor
+      const subjects = directory.get(name) || []
+      
+      if (!subjects.includes(course.title)) {
+        subjects.push(course.title)
+      }
+      
+      directory.set(name, subjects)
+      return directory
+    }, new Map<string, string[]>())
+
+    // This return statement was missing! It converts the Map back into an array.
+    return Array.from(directoryMap.entries())
+      .map(([name, subjects]) => ({ name, subjects }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [schedule])
+
+  // This variable was missing! It handles the search bar filtering.
   const filteredTeachers = adminTeacherDirectory.filter((teacher) =>
     `${teacher.name} ${teacher.subjects.join(" ")}`
       .toLowerCase()
       .includes(query.toLowerCase()),
   )
+
   const initialsFor = (name: string) => {
     const parts = name.replace(/^(Prof\.|Ms\.|Mr\.)\s*/, "").split(" ")
     return `${parts[0]?.charAt(0) || ""}${parts.at(-1)?.charAt(0) || ""}`
   }
+
+  if (loading) return <div className="panel p-4">Loading teacher directory...</div>
+  if (error) return <div className="panel p-4 text-red-500">Error loading data.</div>
 
   return (
     <>
@@ -33,7 +63,7 @@ export function AdminTeacherDirectory() {
             <strong>{adminTeacherDirectory.length}</strong> teachers
           </span>
           <span>
-            <strong>{adminClassSchedule.length}</strong> classes
+            <strong>{schedule.length}</strong> classes
           </span>
         </div>
       </section>

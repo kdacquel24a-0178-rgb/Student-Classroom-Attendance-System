@@ -225,7 +225,7 @@ export default function App() {
           {page === "teachers" && role !== "admin" && <DirectoryPage type="teachers" />}
           {page === "classes" && role === "admin" && <AdminClassSchedule />}
           {page === "classes" && role === "professor" && (
-            <ProfessorClasses courses={assignedProfessorSchedule} professorName={profile.name} />
+            <ProfessorClasses professorName={profile.name} />
           )}
           {page === "attendance" && role === "admin" && <AdminAttendanceOverview />}
           {page === "attendance" && role !== "admin" && (

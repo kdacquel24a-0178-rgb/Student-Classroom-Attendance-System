@@ -1,7 +1,5 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import {
-  students,
-  adminStudentRegistry,
   academicYearSummary,
   adminYearAttendance,
   adminClassSchedule,
@@ -10,8 +8,10 @@ import { AttendanceStatus } from "@/types"
 import { Icon } from "@/components/Icon"
 import { Button } from "@/components"
 import { formatDate } from "@/lib/utils"
+import { supabase } from "@/lib/supabase" // Adjust this import path to your Supabase client
 
 export function AdminAttendanceOverview() {
+  // ... (Keep existing AdminAttendanceOverview exactly as is for now)
   const [attendanceDate, setAttendanceDate] = useState("2026-10-21")
   const formattedDate = formatDate(attendanceDate, {
     weekday: "long",
@@ -129,16 +129,11 @@ export function AttendancePage({
 }: {
   courses: typeof adminClassSchedule
 }) {
-  const [attendance, setAttendance] =
-    useState<Record<string, AttendanceStatus>>(() =>
-      Object.fromEntries(
-        adminStudentRegistry.map((student, index) => [
-          student.id,
-          index % 11 === 0 ? "Absent" : index % 7 === 0 ? "Late" : "Present",
-        ]),
-      ),
-    )
+  const [courseRoster, setCourseRoster] = useState<any[]>([])
+  const [attendance, setAttendance] = useState<Record<string, AttendanceStatus>>({})
   const [saved, setSaved] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  
   const [attendanceSessions, setAttendanceSessions] = useState<Array<{
     courseCode: string
     courseTitle: string
@@ -148,22 +143,107 @@ export function AttendancePage({
     absent: number
     percentage: number
   }>>([])
-  const [selectedCourseCode, setSelectedCourseCode] = useState(
-    courses[0]?.code || "",
-  )
-  const [attendanceDate, setAttendanceDate] = useState("2026-10-21")
-  const selectedCourse =
-    courses.find((course) => course.code === selectedCourseCode) || courses[0]
-  const courseRoster = adminStudentRegistry.filter(
-    (student) =>
-      student.year === selectedCourse?.year && student.course === "BSCS",
-  )
+  
+  const [selectedCourseCode, setSelectedCourseCode] = useState(courses[0]?.code || "")
+  // Default to today's date instead of hardcoded 2026-10-21
+  const [attendanceDate, setAttendanceDate] = useState(new Date().toISOString().split('T')[0])
+  
+  const selectedCourse = courses.find((course) => course.code === selectedCourseCode) || courses[0]
+  
   const formattedAttendanceDate = formatDate(attendanceDate, {
     weekday: "long",
     month: "long",
     day: "numeric",
     year: "numeric",
   })
+
+  // 1. Fetch Students and Existing Attendance for the selected course and date
+  useEffect(() => {
+    if (!selectedCourse) return
+
+    const fetchClassData = async () => {
+      setIsLoading(true)
+      
+      // Fetch students for this course's year and program
+      // Fetch students for this course's year and program using the correct DB columns
+      const { data: studentsData, error: studentsError } = await supabase
+        .from('students')
+        .select('*')
+        .eq('year_level', selectedCourse.year) // Changed from 'year'
+        .eq('program', 'BSCS')                 // Changed from 'course'
+
+      if (studentsData) {
+        // Map the database columns to the properties your front-end expects
+        const mappedStudents = studentsData.map(dbStudent => ({
+          id: dbStudent.id,                     // Keep UUID for the attendance table foreign key
+          student_number: dbStudent.student_number, // Added for UI display
+          name: dbStudent.full_name,            // Mapped from full_name
+          course: dbStudent.program,            // Mapped from program
+          year: dbStudent.year_level            // Mapped from year_level
+        }))
+        setCourseRoster(mappedStudents)
+      } else {
+        console.error("Error fetching students:", studentsError)
+      }
+
+      // Fetch existing attendance records for the selected date and course
+      const { data: attendanceData, error: attendanceError } = await supabase
+        .from('attendance')
+        .select('*')
+        .eq('course_code', selectedCourse.code)
+        .eq('date', attendanceDate)
+
+      if (attendanceData && attendanceData.length > 0) {
+        // Map database records to the local state format
+        const loadedAttendance: Record<string, AttendanceStatus> = {}
+        attendanceData.forEach(record => {
+          loadedAttendance[record.student_id] = record.status
+        })
+        setAttendance(loadedAttendance)
+        setSaved(true)
+      } else {
+        // If no records exist for this date, default everyone to 'Present'
+        const defaultAttendance: Record<string, AttendanceStatus> = {}
+        studentsData?.forEach(student => {
+          defaultAttendance[student.id] = "Present"
+        })
+        setAttendance(defaultAttendance)
+        setSaved(false)
+      }
+
+      setIsLoading(false)
+    }
+
+    fetchClassData()
+  }, [selectedCourse?.code, selectedCourse?.year, attendanceDate])
+
+  // 2. Fetch all saved sessions for the calendar report
+  useEffect(() => {
+    const fetchSessions = async () => {
+      const { data, error } = await supabase
+        .from('attendance_sessions')
+        .select('*')
+        
+      if (data) {
+        // Map snake_case DB columns back to camelCase state if necessary
+        const mappedSessions = data.map(session => ({
+          courseCode: session.course_code,
+          courseTitle: session.course_title,
+          date: session.date,
+          present: session.present,
+          late: session.late,
+          absent: session.absent,
+          percentage: session.percentage
+        }))
+        setAttendanceSessions(mappedSessions)
+      } else if (error) {
+        console.error("Error fetching sessions:", error)
+      }
+    }
+    
+    fetchSessions()
+  }, [])
+
   const counts = useMemo(
     () =>
       courseRoster.reduce<Record<string, number>>((result, student) => {
@@ -171,34 +251,67 @@ export function AttendancePage({
         result[status] = (result[status] || 0) + 1
         return result
       }, {}),
-    [attendance, selectedCourse?.year],
+    [attendance, courseRoster],
   )
-  const saveAttendanceSession = () => {
+
+  // 3. Save attendance to Supabase
+  const saveAttendanceSession = async () => {
     if (!selectedCourse) return
+    setIsLoading(true)
+    
     const present = counts.Present || 0
     const late = counts.Late || 0
     const absent = counts.Absent || 0
     const percentage = Number(
       (((present + late) / Math.max(1, courseRoster.length)) * 100).toFixed(1),
     )
-    const session = {
-      courseCode: selectedCourse.code,
-      courseTitle: selectedCourse.title,
+
+    // Prepare individual student attendance records
+    const attendanceRecords = courseRoster.map(student => ({
+      student_id: student.id,
+      course_code: selectedCourse.code,
+      date: attendanceDate,
+      status: attendance[student.id] || 'Present'
+    }))
+
+    // Upsert individual attendance
+    const { error: attendanceError } = await supabase
+      .from('attendance')
+      .upsert(attendanceRecords, { onConflict: 'student_id, course_code, date' })
+
+    // Prepare aggregate session record
+    const sessionRecord = {
+      course_code: selectedCourse.code,
+      course_title: selectedCourse.title,
       date: attendanceDate,
       present,
       late,
       absent,
       percentage,
     }
-    setAttendanceSessions((current) => [
-      ...current.filter(
-        (item) =>
-          item.courseCode !== selectedCourse.code ||
-          item.date !== attendanceDate,
-      ),
-      session,
-    ])
-    setSaved(true)
+
+    // Upsert session summary for the calendar report
+    const { error: sessionError } = await supabase
+      .from('attendance_sessions')
+      .upsert(sessionRecord, { onConflict: 'course_code, date' })
+
+    if (!attendanceError && !sessionError) {
+      setSaved(true)
+      
+      // Update local sessions state immediately to reflect in UI
+      setAttendanceSessions((current) => [
+        ...current.filter(
+          (item) =>
+            item.courseCode !== selectedCourse.code ||
+            item.date !== attendanceDate,
+        ),
+        { ...sessionRecord, courseCode: sessionRecord.course_code, courseTitle: sessionRecord.course_title },
+      ])
+    } else {
+      console.error("Failed to save:", attendanceError, sessionError)
+    }
+    
+    setIsLoading(false)
   }
 
   return (
@@ -221,6 +334,7 @@ export function AttendancePage({
                 setSaved(false)
               }}
               value={selectedCourseCode}
+              disabled={isLoading}
             >
               {[1, 2, 3, 4].map((year) => {
                 const yearCourses = courses.filter(
@@ -254,11 +368,13 @@ export function AttendancePage({
                 }}
                 type="date"
                 value={attendanceDate}
+                disabled={isLoading}
               />
             </div>
           </label>
         </div>
       </section>
+      
       <section className="panel data-panel">
         <div className="attendance-session-date">
           <Icon name="calendar" size={17} />
@@ -274,10 +390,13 @@ export function AttendancePage({
             ),
           )}
         </div>
-        <div className="attendance-list">
-          {courseRoster.map((student) => (
-            <div className="attendance-row" key={student.id}>
-              <span className="student-cell">
+        <div className="attendance-list" style={{ opacity: isLoading ? 0.6 : 1 }}>
+          {courseRoster.length === 0 && !isLoading ? (
+            <div className="empty-state">No students found for this course.</div>
+          ) : (
+            courseRoster.map((student) => (
+              <div className="attendance-row" key={student.id}>
+                <span className="student-cell">
                 <span className="avatar">
                   {student.name.charAt(0)}
                   {student.name.split(",")[1]?.trim().charAt(0)}
@@ -285,31 +404,34 @@ export function AttendancePage({
                 <span>
                   <strong>{student.name}</strong>
                   <small>
-                    {student.id} · {student.course} {student.year}A
+                    {/* Use student_number for display instead of the UUID id */}
+                    {student.student_number} · {student.course} {student.year}A
                   </small>
                 </span>
               </span>
-              <div className="status-options">
-                {(["Present", "Absent", "Late"] as AttendanceStatus[]).map(
-                  (status) => (
-                    <button
-                      className={`status-button status-${status.toLowerCase()} ${
-                        attendance[student.id] === status ? "selected" : ""
-                      }`}
-                      key={status}
-                      onClick={() => {
-                        setAttendance({ ...attendance, [student.id]: status })
-                        setSaved(false)
-                      }}
-                      type="button"
-                    >
-                      {status}
-                    </button>
-                  ),
-                )}
+                <div className="status-options">
+                  {(["Present", "Absent", "Late"] as AttendanceStatus[]).map(
+                    (status) => (
+                      <button
+                        className={`status-button status-${status.toLowerCase()} ${
+                          attendance[student.id] === status ? "selected" : ""
+                        }`}
+                        key={status}
+                        onClick={() => {
+                          setAttendance({ ...attendance, [student.id]: status })
+                          setSaved(false)
+                        }}
+                        type="button"
+                        disabled={isLoading}
+                      >
+                        {status}
+                      </button>
+                    ),
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
         <div className="save-row">
           {saved && (
@@ -318,11 +440,26 @@ export function AttendancePage({
               {selectedCourse?.code} on {formattedAttendanceDate}
             </span>
           )}
-          <Button className="primary" onClick={saveAttendanceSession}>
-            Save attendance
+          <Button 
+            className="primary" 
+            style={{
+              backgroundColor: "#0066cc", // Vivid blue background
+              color: "white",             // White text
+              padding: "8px 16px",
+              borderRadius: "6px",
+              border: "none",
+              fontWeight: 600,
+              cursor: (isLoading || courseRoster.length === 0) ? "not-allowed" : "pointer",
+              opacity: (isLoading || courseRoster.length === 0) ? 0.6 : 1
+            }}
+            onClick={saveAttendanceSession}
+            disabled={isLoading || courseRoster.length === 0}
+          >
+            {isLoading ? "Saving..." : "Save attendance"}
           </Button>
         </div>
       </section>
+      
       <section className="panel attendance-calendar-report">
         <div className="panel-heading">
           <div>

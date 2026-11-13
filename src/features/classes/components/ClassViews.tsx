@@ -1,36 +1,36 @@
 import { useState } from "react"
-import {
-  roleProfiles,
-  courseSections,
-  rubyCourseSections,
-  maryCourseSections,
-  students,
-  adminStudentRegistry,
-  academicYearSummary,
-  adminClassSchedule,
-} from "@/features/shared/data"
 import { Icon } from "@/components/Icon"
 import { Button } from "@/components"
+import { useClassData } from "@/hooks/useClassData"
 
 export function AdminClassSchedule() {
+  const { schedule, loading, error } = useClassData()
   const [yearFilter, setYearFilter] = useState("all")
   const [query, setQuery] = useState("")
+
+  if (loading) return <div className="panel admin-class-schedule">Loading schedule...</div>
+  if (error) return <div className="panel admin-class-schedule text-red-500">Error loading data.</div>
+
   const yearLabel = (year: number) =>
-    `${year}${
-      year === 1 ? "st" : year === 2 ? "nd" : year === 3 ? "rd" : "th"
-    } Year`
-  const filteredSchedule = adminClassSchedule.filter((course) => {
-    const matchesYear =
-      yearFilter === "all" || course.year === Number(yearFilter)
-    const matchesQuery =
-      `${course.code} ${course.title} ${course.instructor} ${course.room}`
+    `${year}${year === 1 ? "st" : year === 2 ? "nd" : year === 3 ? "rd" : "th"} Year`
+    
+  const filteredSchedule = schedule.filter((course) => {
+    const matchesYear = yearFilter === "all" || course.year === Number(yearFilter)
+    const matchesQuery = `${course.code} ${course.title} ${course.instructor} ${course.room}`
         .toLowerCase()
         .includes(query.toLowerCase())
     return matchesYear && matchesQuery
   })
+  
   const visibleYears = [1, 2, 3, 4].filter((year) =>
     filteredSchedule.some((course) => course.year === year),
   )
+
+  // Dynamically calculate summary stats instead of hardcoding academicYearSummary
+  const dynamicYearSummary = [1, 2, 3, 4].map(year => {
+    const subjects = schedule.filter(c => c.year === year).length;
+    return { year, subjects, units: subjects * 3, hours: subjects * 4 };
+  })
 
   return (
     <section className="panel admin-class-schedule">
@@ -41,7 +41,7 @@ export function AdminClassSchedule() {
           <p>Uploaded course offerings sorted from first through fourth year</p>
         </div>
         <span className="schedule-total">
-          <strong>{adminClassSchedule.length}</strong> scheduled classes
+          <strong>{schedule.length}</strong> scheduled classes
         </span>
       </div>
 
@@ -51,9 +51,9 @@ export function AdminClassSchedule() {
           onClick={() => setYearFilter("all")}
           type="button"
         >
-          All levels <span>{adminClassSchedule.length}</span>
+          All levels <span>{schedule.length}</span>
         </button>
-        {academicYearSummary.map((summary) => (
+        {dynamicYearSummary.filter(s => s.subjects > 0).map((summary) => (
           <button
             className={yearFilter === String(summary.year) ? "active" : ""}
             key={summary.year}
@@ -83,19 +83,16 @@ export function AdminClassSchedule() {
 
       <div className="schedule-levels">
         {visibleYears.map((year) => {
-          const yearCourses = filteredSchedule.filter(
-            (course) => course.year === year,
-          )
-          const summary = academicYearSummary.find((item) => item.year === year)
+          const yearCourses = filteredSchedule.filter((course) => course.year === year)
+          const summary = dynamicYearSummary.find((item) => item.year === year)
+          
           return (
             <section className="schedule-level" key={year}>
               <div className="schedule-level-heading">
                 <div>
                   <span>{year}</span>
                   <div>
-                    <h3>
-                      {yearLabel(year)} · BSCS {year}A
-                    </h3>
+                    <h3>{yearLabel(year)} · BSCS {year}A</h3>
                     <p>
                       {yearCourses.length} displayed subjects · {summary?.units}{" "}
                       total units · {summary?.hours} hours
@@ -118,22 +115,14 @@ export function AdminClassSchedule() {
                   </thead>
                   <tbody>
                     {yearCourses.map((course) => (
-                      <tr key={`${course.year}-${course.code}`}>
-                        <td>
-                          <span className="schedule-code">{course.code}</span>
-                        </td>
-                        <td>
-                          <strong>{course.title}</strong>
-                        </td>
+                      <tr key={course.id}>
+                        <td><span className="schedule-code">{course.code}</span></td>
+                        <td><strong>{course.title}</strong></td>
                         <td>{course.section}</td>
-                        <td>
-                          <span className="day-pill">{course.days}</span>
-                        </td>
+                        <td><span className="day-pill">{course.days}</span></td>
                         <td>{course.time}</td>
                         <td>{course.instructor}</td>
-                        <td>
-                          <span className="room-pill">{course.room}</span>
-                        </td>
+                        <td><span className="room-pill">{course.room}</span></td>
                       </tr>
                     ))}
                   </tbody>
@@ -142,48 +131,49 @@ export function AdminClassSchedule() {
             </section>
           )
         })}
-        {!visibleYears.length && (
-          <p className="schedule-empty">
-            No scheduled classes match the search.
-          </p>
-        )}
-      </div>
-      <div className="schedule-source">
-        Source: Computing Studies First Semester Course Offerings, A.Y.
-        2026–2027
       </div>
     </section>
   )
 }
 
-export function ProfessorClasses({
-  courses,
-  professorName,
-}: {
-  courses: typeof adminClassSchedule
-  professorName: string
-}) {
+export function ProfessorClasses({ professorName }: { professorName: string }) {
+  const { schedule, students, loading } = useClassData()
   const [query, setQuery] = useState("")
   const [yearFilter, setYearFilter] = useState("all")
-  const assignedYears = [...new Set(courses.map((course) => course.year))].sort(
+
+  if (loading) return <div className="panel p-4">Loading assigned classes...</div>
+
+  // Handle the discrepancy between DB names (Ms.) and Profile names (Prof.)
+  const teacherNameOverrides: Record<string, string> = {
+    "Ms. Ruby Cruz": "Prof. Ruby Cruz",
+    "Ms. Mary Arroyo": "Prof. Mary Arroyo",
+  }
+
+  // Filter schedule specific to this professor using the override mapping
+  const professorCourses = schedule.filter((course) => {
+    const normalizedInstructor = teacherNameOverrides[course.instructor] || course.instructor
+    return normalizedInstructor === professorName
+  })
+
+  const assignedYears = [...new Set(professorCourses.map((course) => course.year))].sort(
     (a, b) => a - b,
   )
-  const filteredCourses = courses.filter((course) => {
-    const matchesYear =
-      yearFilter === "all" || course.year === Number(yearFilter)
+  
+  const filteredCourses = professorCourses.filter((course) => {
+    const matchesYear = yearFilter === "all" || course.year === Number(yearFilter)
     const matchesQuery =
       `${course.code} ${course.title} ${course.section} ${course.days} ${course.room}`
         .toLowerCase()
         .includes(query.toLowerCase())
     return matchesYear && matchesQuery
   })
+  
   const visibleYears = assignedYears.filter((year) =>
     filteredCourses.some((course) => course.year === year),
   )
+  
   const yearLabel = (year: number) =>
-    `${year}${
-      year === 1 ? "st" : year === 2 ? "nd" : year === 3 ? "rd" : "th"
-    } Year`
+    `${year}${year === 1 ? "st" : year === 2 ? "nd" : year === 3 ? "rd" : "th"} Year`
 
   return (
     <section className="panel professor-classes">
@@ -195,7 +185,7 @@ export function ProfessorClasses({
         </div>
         <div className="teacher-directory-stats">
           <span>
-            <strong>{courses.length}</strong> classes
+            <strong>{professorCourses.length}</strong> classes
           </span>
           <span>
             <strong>{assignedYears.length}</strong> year levels
@@ -209,10 +199,10 @@ export function ProfessorClasses({
           onClick={() => setYearFilter("all")}
           type="button"
         >
-          All assigned classes <span>{courses.length}</span>
+          All assigned classes <span>{professorCourses.length}</span>
         </button>
         {assignedYears.map((year) => {
-          const count = courses.filter((course) => course.year === year).length
+          const count = professorCourses.filter((course) => course.year === year).length
           return (
             <button
               className={yearFilter === String(year) ? "active" : ""}
@@ -247,9 +237,11 @@ export function ProfessorClasses({
           const yearCourses = filteredCourses.filter(
             (course) => course.year === year,
           )
-          const enrolledStudents = adminStudentRegistry.filter(
+          // Live calculation against the 'students' table hook response
+          const enrolledStudents = students.filter(
             (student) => student.year === year && student.course === "BSCS",
           ).length
+          
           return (
             <section className="professor-class-level" key={year}>
               <div className="schedule-level-heading">
@@ -281,7 +273,7 @@ export function ProfessorClasses({
                   </thead>
                   <tbody>
                     {yearCourses.map((course) => (
-                      <tr key={`${course.year}-${course.code}`}>
+                      <tr key={course.id || `${course.year}-${course.code}`}>
                         <td>
                           <span className="schedule-code">{course.code}</span>
                         </td>
@@ -324,28 +316,29 @@ export function ProfessorClasses({
 }
 
 export function DirectoryPage({ type }: { type: "teachers" | "classes" }) {
+  const { schedule, loading } = useClassData()
   const isTeachers = type === "teachers"
-  const rows = isTeachers
-    ? [
-        [
-          roleProfiles.professor.name,
-          "Computer Science",
-          `${rubyCourseSections.length} courses`,
-          roleProfiles.professor.initials,
-        ],
-        [
-          "Prof. Mary Arroyo",
-          "Computer Science",
-          `${maryCourseSections.length} courses`,
-          "MA",
-        ],
-      ]
-    : courseSections.map((course) => [
-        course.title,
-        course.section,
-        course.instructor,
-        `${course.students} students`,
-      ])
+
+  if (loading) return <div className="panel p-4">Loading directory...</div>
+
+  // Dynamically map DB rows to the original directory grid layout
+  const uniqueTeachers = Array.from(new Set(schedule.map(c => c.instructor)))
+  
+  const teacherRows = uniqueTeachers.map(teacher => {
+    const courseCount = schedule.filter(c => c.instructor === teacher).length;
+    const initials = teacher.split(" ").map(n => n[0]).join("").substring(0, 2);
+    return [teacher, "Computer Science", `${courseCount} courses`, initials]
+  })
+
+  const classRows = schedule.map(course => [
+    course.title,
+    course.section,
+    course.instructor,
+    `View Roster`
+  ])
+
+  const rows = isTeachers ? teacherRows : classRows
+
   return (
     <section className="panel data-panel">
       <div className="toolbar">
@@ -359,8 +352,8 @@ export function DirectoryPage({ type }: { type: "teachers" | "classes" }) {
         </Button>
       </div>
       <div className="directory-grid">
-        {rows.map((row) => (
-          <article className="directory-card" key={row[0]}>
+        {rows.map((row, i) => (
+          <article className="directory-card" key={i}>
             <span className="directory-icon">
               {isTeachers ? row[3] : <Icon name="book" />}
             </span>
