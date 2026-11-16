@@ -1,3 +1,7 @@
+<<<<<<< HEAD
+=======
+
+>>>>>>> dbcd2de3c99c05076f593a4d76279e29796627da
 import { useState, type FormEvent } from "react";
 import { supabase } from "@/supabaseClient";
 import type {
@@ -6,10 +10,14 @@ import type {
   StudentAccount,
 } from "@/types";
 import { Icon } from "@/components/Icon";
+<<<<<<< HEAD
 
 // OLOPSC BMSE Official Logo
 const collegeLogo =
   "https://www.olopsc.edu.ph/OLOPSC%20_BMSE_Official_Logo.webp";
+=======
+import collegeLogo from "@/assets/college-logo.jpg";
+>>>>>>> dbcd2de3c99c05076f593a4d76279e29796627da
 
 function LockIcon() {
   return (
@@ -100,9 +108,16 @@ export function LoginPage({
         });
 
       if (loginError) {
+<<<<<<< HEAD
         console.error("Supabase login error:", loginError);
         throw new Error(loginError.message);
       }
+=======
+  console.error("Supabase login error:", loginError);
+
+  throw new Error(loginError.message);
+}
+>>>>>>> dbcd2de3c99c05076f593a4d76279e29796627da
 
       if (!data.user) {
         throw new Error("Unable to authenticate your account.");
@@ -120,7 +135,11 @@ export function LoginPage({
         await supabase.auth.signOut();
 
         throw new Error(
+<<<<<<< HEAD
           "Your account profile was not found. Please contact the administrator.",
+=======
+          "Your account profile was not found. Please contact the administrator."
+>>>>>>> dbcd2de3c99c05076f593a4d76279e29796627da
         );
       }
 
@@ -149,19 +168,31 @@ export function LoginPage({
           await supabase.auth.signOut();
 
           throw new Error(
+<<<<<<< HEAD
             "Your account does not have a valid assigned role.",
+=======
+            "Your account does not have a valid assigned role."
+>>>>>>> dbcd2de3c99c05076f593a4d76279e29796627da
           );
       }
 
       // 4. Open the appropriate dashboard
       onLogin(userRole);
+<<<<<<< HEAD
+=======
+
+>>>>>>> dbcd2de3c99c05076f593a4d76279e29796627da
     } catch (err: unknown) {
       console.error("Login error:", err);
 
       setError(
         err instanceof Error
           ? err.message
+<<<<<<< HEAD
           : "Unable to sign in. Please try again.",
+=======
+          : "Unable to sign in. Please try again."
+>>>>>>> dbcd2de3c99c05076f593a4d76279e29796627da
       );
     } finally {
       setLoading(false);
@@ -175,7 +206,11 @@ export function LoginPage({
           <img
             className="school-logo"
             src={collegeLogo}
+<<<<<<< HEAD
             alt="OLOPSC BMSE Official Logo"
+=======
+            alt="College crest"
+>>>>>>> dbcd2de3c99c05076f593a4d76279e29796627da
           />
 
           <div>
@@ -220,7 +255,11 @@ export function LoginPage({
           <img
             className="school-logo"
             src={collegeLogo}
+<<<<<<< HEAD
             alt="OLOPSC BMSE Official Logo"
+=======
+            alt="College crest"
+>>>>>>> dbcd2de3c99c05076f593a4d76279e29796627da
           />
 
           <div>
@@ -296,9 +335,13 @@ export function LoginPage({
                   flexShrink: 0,
                   padding: 0,
                 }}
+<<<<<<< HEAD
                 title={
                   showPassword ? "Hide password" : "Show password"
                 }
+=======
+                title={showPassword ? "Hide password" : "Show password"}
+>>>>>>> dbcd2de3c99c05076f593a4d76279e29796627da
                 type="button"
               >
                 {showPassword ? <EyeOffIcon /> : <EyeIcon />}
@@ -328,4 +371,8 @@ export function LoginPage({
       </section>
     </div>
   );
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> dbcd2de3c99c05076f593a4d76279e29796627da
