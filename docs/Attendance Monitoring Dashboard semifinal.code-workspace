@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"path": ".."
+		},
+		{
+			"path": "../../../OneDrive/Desktop/attendance"
+		}
+	],
+	"settings": {
+		"liveServer.settings.multiRootWorkspaceName": "Attendance Monitoring Dashboard"
+	}
+}
