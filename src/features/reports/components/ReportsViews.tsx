@@ -382,7 +382,11 @@ export function ReportsPage({
     { date: "2026-10-22", present: 4, late: 1, absent: 0 },
     { date: "2026-10-23", present: 3, late: 1, absent: 1 },
   ]
+<<<<<<< HEAD
 const dailyReportRows = reportCourses.flatMap((course, courseIndex) =>
+=======
+  const dailyReportRows = reportCourses.flatMap((course, courseIndex) =>
+>>>>>>> aeb538303e480c12e4a5c40fed8fbc766a0ea406
     dailyPatterns.map((day, dayIndex) => {
       const percentage = Number(
         (((day.present + day.late) / students.length) * 100).toFixed(1),

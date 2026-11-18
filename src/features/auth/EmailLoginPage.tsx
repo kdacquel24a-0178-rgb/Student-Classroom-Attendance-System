@@ -13,7 +13,11 @@ const collegeLogo =
 function LockIcon() {
   return (
     <svg
+<<<<<<< HEAD
       width="18"
+=======
+      width="18" 
+>>>>>>> aeb538303e480c12e4a5c40fed8fbc766a0ea406
       height="18"
       viewBox="0 0 24 24"
       fill="none"
@@ -140,6 +144,7 @@ export function LoginPage({
           userRole = "professor";
           break;
 
+<<<<<<< HEAD
         case "student": {
           const { data: studentRecord, error: studentError } =
             await supabase
@@ -162,6 +167,11 @@ export function LoginPage({
           );
           return;
         }
+=======
+        case "student":
+          userRole = "student";
+          break;
+>>>>>>> aeb538303e480c12e4a5c40fed8fbc766a0ea406
 
         default:
           await supabase.auth.signOut();
@@ -346,4 +356,8 @@ export function LoginPage({
       </section>
     </div>
   );
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> aeb538303e480c12e4a5c40fed8fbc766a0ea406

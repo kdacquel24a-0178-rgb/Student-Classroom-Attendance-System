@@ -1,3 +1,7 @@
+<<<<<<< HEAD
+=======
+
+>>>>>>> aeb538303e480c12e4a5c40fed8fbc766a0ea406
 import { supabase } from "@/supabaseClient"
 import { useEffect, useState } from "react"
 import {
@@ -27,6 +31,7 @@ import {
 } from "@/features"
 import { LoginPage } from "@/features/auth/EmailLoginPage"
 
+<<<<<<< HEAD
 interface DbStudentProfile {
   id: string | number
   user_id?: string | null
@@ -71,11 +76,16 @@ function formatProgramFull(program?: string | null): string {
   return raw
 }
 
+=======
+>>>>>>> aeb538303e480c12e4a5c40fed8fbc766a0ea406
 export default function App() {
   const [role, setRole] = useState<UserRole | null>(null)
   const [professorAccount, setProfessorAccount] = useState<ProfessorAccount>("ruby")
   const [studentAccount, setStudentAccount] = useState<StudentAccount>("marc")
+<<<<<<< HEAD
   const [dbStudent, setDbStudent] = useState<DbStudentProfile | null>(null)
+=======
+>>>>>>> aeb538303e480c12e4a5c40fed8fbc766a0ea406
   const [page, setPage] = useState<Page>("overview")
   const [mobileNav, setMobileNav] = useState(false)
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null)
@@ -116,6 +126,7 @@ export default function App() {
         if (accountKey && studentProfiles[accountKey as StudentAccount]) {
           setStudentAccount(accountKey as StudentAccount)
         }
+<<<<<<< HEAD
 
         const { data: studentRow } = await supabase
           .from("students")
@@ -127,6 +138,8 @@ export default function App() {
           setDbStudent(studentRow as DbStudentProfile)
         }
 
+=======
+>>>>>>> aeb538303e480c12e4a5c40fed8fbc766a0ea406
         setPage("reports")
       } else {
         await supabase.auth.signOut()
@@ -165,6 +178,7 @@ export default function App() {
             setProfessorAccount(selectedProfessor)
           }
 
+<<<<<<< HEAD
           if (selectedStudent) {
             if (
               typeof selectedStudent === "string" &&
@@ -175,6 +189,10 @@ export default function App() {
             } else if (typeof selectedStudent === "object") {
               setDbStudent(selectedStudent as unknown as DbStudentProfile)
             }
+=======
+          if (selectedStudent && studentProfiles[selectedStudent]) {
+            setStudentAccount(selectedStudent)
+>>>>>>> aeb538303e480c12e4a5c40fed8fbc766a0ea406
           }
 
           setPage(selectedRole === "student" ? "reports" : "overview")
@@ -184,6 +202,7 @@ export default function App() {
     )
   }
 
+<<<<<<< HEAD
   const studentYearNum = String(dbStudent?.year_level ?? "").replace(/\D/g, "")
   const studentShortProgram = dbStudent
     ? `${formatProgramShort(dbStudent.program)}${studentYearNum ? ` ${studentYearNum}` : ""}`
@@ -199,11 +218,17 @@ export default function App() {
       }
     : studentProfiles[studentAccount]
 
+=======
+>>>>>>> aeb538303e480c12e4a5c40fed8fbc766a0ea406
   const profile =
     role === "professor"
       ? professorProfiles[professorAccount]
       : role === "student"
+<<<<<<< HEAD
         ? resolvedStudentProfile
+=======
+        ? studentProfiles[studentAccount]
+>>>>>>> aeb538303e480c12e4a5c40fed8fbc766a0ea406
         : roleProfiles[role]
 
   const assignedProfessorCourses =
@@ -220,6 +245,7 @@ export default function App() {
         )
       : []
 
+<<<<<<< HEAD
   const studentYearCourses: typeof courseSections =
     role === "student" && studentYearNum && studentYearNum !== "3"
       ? (adminClassSchedule
@@ -247,6 +273,12 @@ export default function App() {
   return (
     <div className="app-shell">
       <aside className={`sidebar ${mobileNav ? "open" : ""}`}>
+=======
+  return (
+    <div className="app-shell">
+      <aside className={`sidebar ${mobileNav ? "open" : ""}`}>
+
+>>>>>>> aeb538303e480c12e4a5c40fed8fbc766a0ea406
         {/* SIDEBAR BRAND / OFFICIAL OLOPSC LOGO */}
         <div className="brand">
           <img
@@ -297,7 +329,10 @@ export default function App() {
               }
 
               setRole(null)
+<<<<<<< HEAD
               setDbStudent(null)
+=======
+>>>>>>> aeb538303e480c12e4a5c40fed8fbc766a0ea406
               setSelectedStudentId(null)
               setPage("overview")
               setMobileNav(false)
@@ -315,9 +350,13 @@ export default function App() {
             <span>
               <strong>{profile.name}</strong>
               <small>
+<<<<<<< HEAD
                 {role === "student"
                   ? `${studentShortProgram} · Student`
                   : profile.title}
+=======
+                {profile.program ? "BSCS 3 · Student" : profile.title}
+>>>>>>> aeb538303e480c12e4a5c40fed8fbc766a0ea406
               </small>
             </span>
           </div>
@@ -411,11 +450,19 @@ export default function App() {
               courses={
                 role === "professor"
                   ? assignedProfessorCourses
+<<<<<<< HEAD
                   : studentYearCourses
               }
               studentId={
                 role === "student"
                   ? resolvedStudentProfile.studentId
+=======
+                  : courseSections
+              }
+              studentId={
+                role === "student"
+                  ? studentProfiles[studentAccount].studentId
+>>>>>>> aeb538303e480c12e4a5c40fed8fbc766a0ea406
                   : undefined
               }
               onViewStudent={(studentId) => {
@@ -430,4 +477,8 @@ export default function App() {
       </main>
     </div>
   )
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> aeb538303e480c12e4a5c40fed8fbc766a0ea406
