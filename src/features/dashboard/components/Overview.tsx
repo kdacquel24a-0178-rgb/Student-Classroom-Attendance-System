@@ -1,0 +1,632 @@
+import { useEffect, useState } from "react"
+import {
+  Page,
+  courseSections,
+  academicYearSummary,
+} from "@/features/shared/data"
+import { UserRole } from "@/types"
+import { Icon } from "@/components/Icon"
+import type { IconName } from "@/components/Icon"
+import { Button } from "@/components"
+import { supabase } from "@/lib/supabase"
+
+export function Overview({
+  setPage,
+  userName,
+  role,
+  professorCourses = [],
+}: {
+  setPage: (page: Page) => void
+  userName: string
+  role: UserRole
+  professorCourses?: typeof courseSections
+}) {
+  // ============================================
+  // REAL-TIME PHILIPPINE / MANILA DATE AND TIME
+  // ============================================
+  const [currentDateTime, setCurrentDateTime] = useState(
+    new Date(),
+  )
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentDateTime(new Date())
+    }, 1000)
+
+    return () => clearInterval(timer)
+  }, [])
+
+  const manilaDate = new Intl.DateTimeFormat("en-PH", {
+    timeZone: "Asia/Manila",
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  }).format(currentDateTime)
+
+  const manilaTime = new Intl.DateTimeFormat("en-PH", {
+    timeZone: "Asia/Manila",
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+  }).format(currentDateTime)
+
+  // ============================================
+  // DASHBOARD METRICS
+  // ============================================
+  const [totalStudents, setTotalStudents] = useState(0)
+  const [presentToday, setPresentToday] = useState(0)
+  const [absentToday, setAbsentToday] = useState(0)
+  const [lateToday, setLateToday] = useState(0)
+
+  const [metricsLoading, setMetricsLoading] = useState(true)
+
+  // ============================================
+  // LOAD DATA FROM SUPABASE
+  // ============================================
+  useEffect(() => {
+    let isMounted = true
+
+    async function loadDashboardMetrics() {
+      try {
+        setMetricsLoading(true)
+
+        // Get today's date using Philippine / Manila time.
+        const today = new Intl.DateTimeFormat("en-CA", {
+          timeZone: "Asia/Manila",
+        }).format(new Date())
+
+        console.log("Loading dashboard metrics for:", today)
+
+        // ============================================
+        // TOTAL ACTIVE STUDENTS
+        // ============================================
+        const {
+          count: studentCount,
+          error: studentsError,
+        } = await supabase
+          .from("students")
+          .select("id", {
+            count: "exact",
+            head: true,
+          })
+          .eq("status", "Active")
+
+        if (studentsError) {
+          console.error(
+            "Error loading students:",
+            studentsError,
+          )
+        } else if (isMounted) {
+          setTotalStudents(studentCount ?? 0)
+        }
+
+        // ============================================
+        // TODAY'S ATTENDANCE
+        // ============================================
+        const {
+          data: attendanceData,
+          error: attendanceError,
+        } = await supabase
+          .from("attendance")
+          .select("status")
+          .eq("date", today)
+
+        if (attendanceError) {
+          console.error(
+            "Error loading attendance:",
+            attendanceError,
+          )
+        } else if (isMounted) {
+          const present =
+            attendanceData?.filter(
+              (record) => record.status === "Present",
+            ).length ?? 0
+
+          const absent =
+            attendanceData?.filter(
+              (record) => record.status === "Absent",
+            ).length ?? 0
+
+          const late =
+            attendanceData?.filter(
+              (record) => record.status === "Late",
+            ).length ?? 0
+
+          setPresentToday(present)
+          setAbsentToday(absent)
+          setLateToday(late)
+        }
+      } catch (error) {
+        console.error(
+          "Failed to load dashboard metrics:",
+          error,
+        )
+      } finally {
+        if (isMounted) {
+          setMetricsLoading(false)
+        }
+      }
+    }
+
+    loadDashboardMetrics()
+
+    // Refresh dashboard numbers every 30 seconds.
+    const refreshTimer = setInterval(
+      loadDashboardMetrics,
+      30000,
+    )
+
+    return () => {
+      isMounted = false
+      clearInterval(refreshTimer)
+    }
+  }, [])
+
+  // ============================================
+  // ATTENDANCE PERCENTAGE
+  // ============================================
+  const attendancePercentage =
+    totalStudents > 0
+      ? Math.round(
+          (presentToday / totalStudents) * 100,
+        )
+      : 0
+
+  // ============================================
+  // DASHBOARD METRICS
+  // ============================================
+  const metrics = [
+    {
+      label: "Total students",
+      value: metricsLoading
+        ? "..."
+        : String(totalStudents),
+      detail:
+        role === "admin"
+          ? "Active students"
+          : `${totalStudents} active students`,
+      icon: "students",
+      tone: "blue",
+    },
+    {
+      label: "Present today",
+      value: metricsLoading
+        ? "..."
+        : String(presentToday),
+      detail: `${attendancePercentage}% present today`,
+      icon: "check",
+      tone: "green",
+    },
+    {
+      label: "Absent today",
+      value: metricsLoading
+        ? "..."
+        : String(absentToday),
+      detail: "Requires follow-up",
+      icon: "alert",
+      tone: "red",
+    },
+    {
+      label: "Late today",
+      value: metricsLoading
+        ? "..."
+        : String(lateToday),
+      detail: "Arrived late",
+      icon: "clock",
+      tone: "amber",
+    },
+  ] as const
+
+  return (
+    <>
+      {/* ============================================
+          WELCOME CARD
+          ============================================ */}
+      <section className="welcome-card">
+        <div>
+          <span className="eyebrow">
+            {manilaDate} · {manilaTime}
+          </span>
+
+          <h2>Good morning, {userName}</h2>
+
+          <p>
+            Here’s what’s happening across your school today.
+          </p>
+        </div>
+
+        {role === "professor" && (
+          <Button
+            className="primary"
+            onClick={() => setPage("attendance")}
+          >
+            <Icon name="calendar" size={18} />
+            Take attendance
+          </Button>
+        )}
+      </section>
+
+      {/* ============================================
+          ATTENDANCE SUMMARY
+          ============================================ */}
+      <section
+        aria-label="Attendance summary"
+        className="metric-grid"
+      >
+        {metrics.map((metric) => (
+          <article
+            className="metric-card"
+            key={metric.label}
+          >
+            <div className={`metric-icon ${metric.tone}`}>
+              <Icon name={metric.icon} size={22} />
+            </div>
+
+            <span>{metric.label}</span>
+
+            <strong>{metric.value}</strong>
+
+            <small>{metric.detail}</small>
+          </article>
+        ))}
+      </section>
+
+      {/* ============================================
+          WEEKLY ATTENDANCE
+          ============================================ */}
+      <div className="dashboard-grid overview-chart-grid">
+        {role === "admin" && (
+          <section className="panel attendance-chart">
+            <div className="panel-heading">
+              <div>
+                <h3>Weekly attendance</h3>
+
+                <p>
+                  Daily attendance rate for all classes
+                </p>
+              </div>
+
+              <span className="period">
+                This week
+              </span>
+            </div>
+
+            <div className="chart-summary">
+              <strong>91.3%</strong>
+
+              <span>
+                210 of 230 weekly attendance marks present
+              </span>
+            </div>
+
+            <div
+              className="bar-chart"
+              aria-label="Weekly attendance chart"
+            >
+              {[87, 93, 91, 96, 89].map(
+                (height, index) => (
+                  <div
+                    className="bar-column"
+                    key={index}
+                  >
+                    <span className="bar-value">
+                      {[40, 43, 42, 44, 41][index]} of 46
+                    </span>
+
+                    <div className="bar-track">
+                      <div
+                        className="bar-fill"
+                        style={{
+                          height: `${height}%`,
+                        }}
+                      />
+                    </div>
+
+                    <small>
+                      {[
+                        "Mon",
+                        "Tue",
+                        "Wed",
+                        "Thu",
+                        "Fri",
+                      ][index]}
+                    </small>
+                  </div>
+                ),
+              )}
+            </div>
+
+            <div
+              className="weekly-legend"
+              aria-label="Weekly attendance legend"
+            >
+              {[
+                ["Monday", 40, 87],
+                ["Tuesday", 43, 93],
+                ["Wednesday", 42, 91],
+                ["Thursday", 44, 96],
+                ["Friday", 41, 89],
+              ].map(
+                ([day, present, percentage]) => (
+                  <span key={day}>
+                    <i />
+
+                    <b>{day}</b>
+
+                    <small>
+                      {present} present · {percentage}%
+                    </small>
+                  </span>
+                ),
+              )}
+            </div>
+          </section>
+        )}
+      </div>
+
+      {/* ============================================
+          QUICK ACTIONS
+          ============================================ */}
+      <section className="panel quick-panel">
+        <div className="panel-heading">
+          <div>
+            <h3>Quick actions</h3>
+
+            <p>
+              Common tasks, one click away
+            </p>
+          </div>
+        </div>
+
+        <div className="quick-grid">
+          {[
+            [
+              "students",
+              "Add a student",
+              "Create a new student record",
+              "students",
+            ],
+            [
+              "book",
+              "View class schedule",
+              "Review classes and assignments",
+              "classes",
+            ],
+            [
+              "calendar",
+              "Take attendance",
+              "Mark today’s attendance",
+              "attendance",
+            ],
+            [
+              "chart",
+              "View reports",
+              "Explore attendance insights",
+              "reports",
+            ],
+          ]
+            .filter(
+              ([, , , page]) =>
+                (role !== "professor" ||
+                  page !== "students") &&
+                (role !== "admin" ||
+                  page !== "attendance"),
+            )
+            .map(
+              ([
+                icon,
+                title,
+                detail,
+                page,
+              ]) => (
+                <Button
+                  className="quick-action"
+                  key={title}
+                  onClick={() =>
+                    setPage(page as Page)
+                  }
+                >
+                  <span className="quick-icon">
+                    <Icon
+                      name={icon as IconName}
+                    />
+                  </span>
+
+                  <span>
+                    <strong>{title}</strong>
+
+                    <small>{detail}</small>
+                  </span>
+
+                  <Icon
+                    name="chevron"
+                    size={18}
+                  />
+                </Button>
+              ),
+            )}
+        </div>
+      </section>
+
+      {/* ============================================
+          PROFESSOR COURSES
+          ============================================ */}
+      {role === "professor" && (
+        <section className="panel professor-courses">
+          <div className="panel-heading">
+            <div>
+              <h3>Assigned class schedule</h3>
+
+              <p>
+                Courses assigned to {userName}
+              </p>
+            </div>
+
+            <Button
+              className="text-button"
+              onClick={() => setPage("classes")}
+            >
+              View schedule
+              <Icon name="chevron" size={16} />
+            </Button>
+          </div>
+
+          <div className="professor-course-grid">
+            {professorCourses.map((course) => (
+              <article
+                className="professor-course-card"
+                key={course.code}
+              >
+                <span>{course.code}</span>
+
+                <div>
+                  <strong>{course.title}</strong>
+
+                  <small>
+                    {course.section} ·{" "}
+                    {course.students} students
+                  </small>
+                </div>
+
+                <Icon
+                  name="chevron"
+                  size={17}
+                />
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* ============================================
+          ADMIN DATA
+          ============================================ */}
+      {role === "admin" && (
+        <section className="panel admin-data-overview">
+          <div className="panel-heading">
+            <div>
+              <h3>Connected academic data</h3>
+
+              <p>
+                Uploaded enrollment and schedule
+                information across all modules
+              </p>
+            </div>
+
+            <span className="sync-status">
+              <Icon name="check" size={14} />
+              Synced
+            </span>
+          </div>
+
+          <div className="admin-module-grid">
+            {[
+              [
+                "students",
+                "Students",
+                String(totalStudents),
+                "Active students",
+                "students",
+              ],
+              [
+                "teachers",
+                "Teachers",
+                "8",
+                "Faculty records",
+                "teachers",
+              ],
+              [
+                "book",
+                "Class Schedule",
+                "35",
+                "Scheduled subjects",
+                "classes",
+              ],
+              [
+                "calendar",
+                "Attendance",
+                `${attendancePercentage}%`,
+                "Current attendance",
+                "attendance",
+              ],
+              [
+                "chart",
+                "Reports",
+                "4",
+                "Year-level summaries",
+                "reports",
+              ],
+            ].map(
+              ([
+                icon,
+                label,
+                value,
+                detail,
+                page,
+              ]) => (
+                <button
+                  className="admin-module-card"
+                  key={label}
+                  onClick={() =>
+                    setPage(page as Page)
+                  }
+                  type="button"
+                >
+                  <span>
+                    <Icon
+                      name={icon as IconName}
+                      size={19}
+                    />
+                  </span>
+
+                  <strong>{value}</strong>
+
+                  <b>{label}</b>
+
+                  <small>{detail}</small>
+
+                  <Icon
+                    name="chevron"
+                    size={15}
+                  />
+                </button>
+              ),
+            )}
+          </div>
+
+          <div className="admin-year-strip">
+            {academicYearSummary.map(
+              (summary) => (
+                <span key={summary.year}>
+                  <b>
+                    Year {summary.year}
+                  </b>
+
+                  <strong>
+                    {summary.students} students
+                  </strong>
+
+                  <small>
+                    {summary.subjects} subjects ·{" "}
+                    {summary.units} units
+                  </small>
+                </span>
+              ),
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* ============================================
+          DATA NOTICE
+          ============================================ */}
+      <p className="sample-note">
+        {role === "admin"
+          ? "Dashboard attendance figures are connected to your Supabase records."
+          : "Attendance figures are connected to your Supabase records."}
+      </p>
+    </>
+  )
+}
