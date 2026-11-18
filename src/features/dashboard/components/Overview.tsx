@@ -2,15 +2,13 @@ import { useEffect, useState } from "react"
 import {
   Page,
   courseSections,
-  students,
   academicYearSummary,
 } from "@/features/shared/data"
 import { UserRole } from "@/types"
 import { Icon } from "@/components/Icon"
 import type { IconName } from "@/components/Icon"
 import { Button } from "@/components"
-
-
+import { supabase } from "@/lib/supabase"
 
 export function Overview({
   setPage,
@@ -26,7 +24,9 @@ export function Overview({
   // ============================================
   // REAL-TIME PHILIPPINE / MANILA DATE AND TIME
   // ============================================
-  const [currentDateTime, setCurrentDateTime] = useState(new Date())
+  const [currentDateTime, setCurrentDateTime] = useState(
+    new Date(),
+  )
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -55,38 +55,165 @@ export function Overview({
   // ============================================
   // DASHBOARD METRICS
   // ============================================
+  const [totalStudents, setTotalStudents] = useState(0)
+  const [presentToday, setPresentToday] = useState(0)
+  const [absentToday, setAbsentToday] = useState(0)
+  const [lateToday, setLateToday] = useState(0)
+
+  const [metricsLoading, setMetricsLoading] = useState(true)
+
+  // ============================================
+  // LOAD DATA FROM SUPABASE
+  // ============================================
+  useEffect(() => {
+    let isMounted = true
+
+    async function loadDashboardMetrics() {
+      try {
+        setMetricsLoading(true)
+
+        // Get today's date using Philippine / Manila time.
+        const today = new Intl.DateTimeFormat("en-CA", {
+          timeZone: "Asia/Manila",
+        }).format(new Date())
+
+        console.log("Loading dashboard metrics for:", today)
+
+        // ============================================
+        // TOTAL ACTIVE STUDENTS
+        // ============================================
+        const {
+          count: studentCount,
+          error: studentsError,
+        } = await supabase
+          .from("students")
+          .select("id", {
+            count: "exact",
+            head: true,
+          })
+          .eq("status", "Active")
+
+        if (studentsError) {
+          console.error(
+            "Error loading students:",
+            studentsError,
+          )
+        } else if (isMounted) {
+          setTotalStudents(studentCount ?? 0)
+        }
+
+        // ============================================
+        // TODAY'S ATTENDANCE
+        // ============================================
+        const {
+          data: attendanceData,
+          error: attendanceError,
+        } = await supabase
+          .from("attendance")
+          .select("status")
+          .eq("date", today)
+
+        if (attendanceError) {
+          console.error(
+            "Error loading attendance:",
+            attendanceError,
+          )
+        } else if (isMounted) {
+          const present =
+            attendanceData?.filter(
+              (record) => record.status === "Present",
+            ).length ?? 0
+
+          const absent =
+            attendanceData?.filter(
+              (record) => record.status === "Absent",
+            ).length ?? 0
+
+          const late =
+            attendanceData?.filter(
+              (record) => record.status === "Late",
+            ).length ?? 0
+
+          setPresentToday(present)
+          setAbsentToday(absent)
+          setLateToday(late)
+        }
+      } catch (error) {
+        console.error(
+          "Failed to load dashboard metrics:",
+          error,
+        )
+      } finally {
+        if (isMounted) {
+          setMetricsLoading(false)
+        }
+      }
+    }
+
+    loadDashboardMetrics()
+
+    // Refresh dashboard numbers every 30 seconds.
+    const refreshTimer = setInterval(
+      loadDashboardMetrics,
+      30000,
+    )
+
+    return () => {
+      isMounted = false
+      clearInterval(refreshTimer)
+    }
+  }, [])
+
+  // ============================================
+  // ATTENDANCE PERCENTAGE
+  // ============================================
+  const attendancePercentage =
+    totalStudents > 0
+      ? Math.round(
+          (presentToday / totalStudents) * 100,
+        )
+      : 0
+
+  // ============================================
+  // DASHBOARD METRICS
+  // ============================================
   const metrics = [
     {
       label: "Total students",
-      value: role === "admin" ? "66" : "5",
-      detail: role === "admin" ? "Across Years 1–4" : "BSCS3A students",
+      value: metricsLoading
+        ? "..."
+        : String(totalStudents),
+      detail:
+        role === "admin"
+          ? "Active students"
+          : `${totalStudents} active students`,
       icon: "students",
       tone: "blue",
     },
     {
       label: "Present today",
-      value: role === "admin" ? "42" : "3",
-      detail:
-        role === "admin"
-          ? "91.3% present today"
-          : "60% present today",
+      value: metricsLoading
+        ? "..."
+        : String(presentToday),
+      detail: `${attendancePercentage}% present today`,
       icon: "check",
       tone: "green",
     },
     {
       label: "Absent today",
-      value: role === "admin" ? "3" : "1",
-      detail:
-        role === "admin"
-          ? "Across all year levels"
-          : "Requires follow-up",
+      value: metricsLoading
+        ? "..."
+        : String(absentToday),
+      detail: "Requires follow-up",
       icon: "alert",
       tone: "red",
     },
     {
       label: "Late today",
-      value: "1",
-      detail: "Arrived after 8:15",
+      value: metricsLoading
+        ? "..."
+        : String(lateToday),
+      detail: "Arrived late",
       icon: "clock",
       tone: "amber",
     },
@@ -94,14 +221,13 @@ export function Overview({
 
   return (
     <>
-    
       {/* ============================================
           WELCOME CARD
           ============================================ */}
       <section className="welcome-card">
         <div>
           <span className="eyebrow">
-            {manilaDate} · {manilaTime} 
+            {manilaDate} · {manilaTime}
           </span>
 
           <h2>Good morning, {userName}</h2>
@@ -400,8 +526,8 @@ export function Overview({
               [
                 "students",
                 "Students",
-                "66",
-                "Years 1–4",
+                String(totalStudents),
+                "Active students",
                 "students",
               ],
               [
@@ -421,8 +547,8 @@ export function Overview({
               [
                 "calendar",
                 "Attendance",
-                "91.3%",
-                "Current average",
+                `${attendancePercentage}%`,
+                "Current attendance",
                 "attendance",
               ],
               [
@@ -494,12 +620,12 @@ export function Overview({
       )}
 
       {/* ============================================
-          SAMPLE DATA NOTICE
+          DATA NOTICE
           ============================================ */}
       <p className="sample-note">
         {role === "admin"
-          ? "Enrollment and schedule figures reflect the uploaded A.Y. 2026–2027 records."
-          : "Dashboard figures are illustrative and do not represent actual student records."}
+          ? "Dashboard attendance figures are connected to your Supabase records."
+          : "Attendance figures are connected to your Supabase records."}
       </p>
     </>
   )
