@@ -6,12 +6,14 @@ import type {
   StudentAccount,
 } from "@/types";
 import { Icon } from "@/components/Icon";
-import collegeLogo from "@/assets/college-logo.jpg";
+
+const collegeLogo =
+  "https://www.olopsc.edu.ph/OLOPSC%20_BMSE_Official_Logo.webp";
 
 function LockIcon() {
   return (
     <svg
-      width="18"
+      width="18" 
       height="18"
       viewBox="0 0 24 24"
       fill="none"
@@ -172,7 +174,7 @@ export function LoginPage({
           <img
             className="school-logo"
             src={collegeLogo}
-            alt="OLOPSC BMSE Official Logo"
+            alt="OLOPSC CBME Official Logo"
           />
 
           <div>
@@ -217,7 +219,7 @@ export function LoginPage({
           <img
             className="school-logo"
             src={collegeLogo}
-            alt="OLOPSC BMSE Official Logo"
+            alt="OLOPSC CBME Official Logo"
           />
 
           <div>
